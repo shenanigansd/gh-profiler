@@ -203,6 +203,11 @@ def _parse_pr_activity(pr_activity_str):
     search = data["data"]["search"]
     prs = search["nodes"]
 
+    # Nodes the authenticated user can't access are returned as null, e.g.
+    # PRs against repos protected by organization SAML enforcement. We can't
+    # analyze those PRs, so ignore them.
+    prs = [pr for pr in prs if pr and pr.get("repository")]
+
     pdata.opened_count = len(prs)
 
     # PRs against repos the user owns.
@@ -252,6 +257,12 @@ def _parse_issue_activity(issue_activity_str):
         sys.exit(msg)
 
     issue_dicts = issue_activity["nodes"]
+
+    # Nodes the authenticated user can't access are returned as null, e.g.
+    # issues in repos protected by organization SAML enforcement. We can't
+    # analyze those issues, so ignore them.
+    issue_dicts = [id for id in issue_dicts if id and id.get("repository")]
+
     issues_owned = [
         id for id in issue_dicts
         if id["repository"]["owner"]["login"] == pdata.username
