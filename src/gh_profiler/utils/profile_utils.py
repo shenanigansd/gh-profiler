@@ -76,6 +76,24 @@ def get_data():
 
 # --- Helper functions ---
 
+def _repo_owner_login(item):
+    """Return the login of the repository owner for a PR/issue node.
+
+    GitHub's search API can return a null `repository` (or a repository with
+    a null `owner`) for results the authenticated user can no longer fully
+    resolve, e.g. a repo that was deleted, transferred, or made private after
+    the PR/issue was opened. Treat those as unowned rather than crashing.
+    """
+    repository = item.get("repository")
+    if not repository:
+        return None
+
+    owner = repository.get("owner")
+    if not owner:
+        return None
+
+    return owner["login"]
+
 def _fetch_status():
     """Fetch output of `gh auth status`.
     
@@ -208,8 +226,8 @@ def _parse_pr_activity(pr_activity_str):
     # PRs against repos the user owns.
     prs_owned = [
         pr for pr in prs
-        if pr["repository"]["owner"]["login"].casefold()
-        == pdata.username.casefold()
+        if (owner := _repo_owner_login(pr)) is not None
+        and owner.casefold() == pdata.username.casefold()
     ]
 
     pdata.opened_count_owned = len(prs_owned)
@@ -217,7 +235,7 @@ def _parse_pr_activity(pr_activity_str):
     # PRS against repos in orgs the user is publicly associated with.
     prs_orgs = [
         pr for pr in prs
-        if pr["repository"]["owner"]["login"] in pdata.orgs
+        if _repo_owner_login(pr) in pdata.orgs
     ]
 
     pdata.opened_count_orgs = len(prs_orgs)
@@ -254,11 +272,11 @@ def _parse_issue_activity(issue_activity_str):
     issue_dicts = issue_activity["nodes"]
     issues_owned = [
         id for id in issue_dicts
-        if id["repository"]["owner"]["login"] == pdata.username
+        if _repo_owner_login(id) == pdata.username
     ]
     issues_orgs = [
          id for id in issue_dicts
-         if id["repository"]["owner"]["login"] in pdata.orgs
+         if _repo_owner_login(id) in pdata.orgs
     ]
     issues_external = [
          id for id in issue_dicts
